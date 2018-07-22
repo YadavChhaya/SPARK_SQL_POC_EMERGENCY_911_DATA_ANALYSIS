@@ -1,0 +1,146 @@
+Spark SQL POC – 911 -Emergency Helpline Number Data Analysis
+==================================================================
+911.csv Dataset Description:
+----------------------------
+lat: String variable, Latitude
+lng: String variable, Longitude
+desc: String variable, Description of the Emergency Call
+zip: String variable, Zip code
+title: String variable, Title
+timeStamp: String variable, YYYY-MM-DD HH:MM:SS
+twp: String variable, Township
+addr: String variable, Address
+e: String variable, Dummy variable (always 1)
+
+zipcode.csv Dataset description:
+-------------------------------
+zip: String variable, Zip code
+city: String variable, City
+state: String variable, State
+latitude: String variable, Latitude
+longitude: String variable, Longitude
+timezone: String variable, Time zone
+dst: String variable, district
+
+
+Source Code:
+-----------------
+
+hadoop fs -mkdir -p /user/hadoop/input/
+hadoop fs -put /home/cloudera/Downloads/911.csv /user/hadoop/input/
+hadoop fs -put /home/cloudera/Downloads/zipcode.csv /user/hadoop/input/
+spark-shell
+val rdd11 = sc.textFile("hdfs://quickstart.cloudera:8020/user/hadoop/input/911.csv")
+val header = rdd11.first()
+val rdd12 = rdd11.filter(row => row != header)
+val rdd13 = rdd12.map(x=>x.split(","))
+val rdd14 = rdd13.filter(x => x.toString().length>=9)
+rdd14.count()
+case class emergency(
+latitude:String,
+longitude:String,
+calldescription:String,
+zipcode:String,
+title:String,
+timeStamp:String,
+township:String,
+address:String,
+dummyvarone:String
+)
+val df1 = rdd14.map(x => emergency(x(0),x(1), x(2), x(3), x(4).substring(0,x(4).indexOf(":")), x(5), x(6), x(7), x(8))).toDF
+df1.registerTempTable("table911")
+df1.count
+
+val rdd21 = sc.textFile("hdfs://quickstart.cloudera:8020/user/hadoop/input/zipcode.csv")
+val header = rdd21.first()
+val rdd22 = rdd21.filter(row => row != header)
+val rdd23 = rdd22.map(x=>x.split(","))
+val rdd24 = rdd23.filter(x => x.length>=7)
+rdd24.count()
+case class zipclass(
+zipcode:String,
+city:String,
+state:String,
+latitude:String,
+longitude:String,
+timezone:String,
+district:String
+)
+
+val df2 = rdd24.map(x => zipclass(x(0).replace("\"", ""),
+x(1).replace("\"", ""),
+x(2).replace("\"", ""), 
+x(3).replace("\"", ""), 
+x(4).replace("\"", ""), 
+x(5).replace("\"", ""), 
+x(6).replace("\"", "") )).toDF
+df2.registerTempTable("tablezip")
+df2.count
+
+val dfjoin = sqlContext.sql("select e.title, z.city, z.state from table911 e JOIN tablezip z ON e.zipcode == z.zipcode ")
+
+
+
+Problem Statement 1:
+
+What kind of problems are prevalent, and in which state? 
+========================================================
+
+Source Code:
+------------
+
+dfjoin.groupBy("z.state","e.title").count.show()
+
+Output:
+
++-----+-------+-----+                                                           
+|state|  title|count|
++-----+-------+-----+
+|   PA|   Fire|13012|
+|   PA|Traffic|29297|
+|   AL|Traffic|    1|
+|   PA|    EMS|44326|
+|   TX|    EMS|    1|
++-----+-------+-----+
+
+
+
+Problem Statement 2:
+
+What kind of problems are prevalent, and in which city?
+=======================================================
+
+Source Code:
+------------
+
+
+dfjoin.groupBy("z.city","e.title").count.show()
+
+Output:
+
++----------------+-------+-----+                                                
+|            city|  title|count|
++----------------+-------+-----+
+|       Blue Bell|Traffic|  736|
+|      Jenkintown|Traffic|  873|
+|           Barto|Traffic|   29|
+|         Oreland|    EMS|  159|
+|       Havertown|   Fire|    4|
+|           Bally|    EMS|    3|
+|          Ambler|Traffic| 1214|
+|        Narberth|   Fire|  128|
+|        Glenside|    EMS| 1354|
+|       Souderton|   Fire|  190|
+|      Green Lane|   Fire|   56|
+|Plymouth Meeting|Traffic|  850|
+|      Royersford|Traffic|  999|
+|       Flourtown|   Fire|  122|
+|       Pottstown|    EMS| 4237|
+|      Bridgeport|   Fire|   65|
+|        Hereford|    EMS|    4|
+|   Bechtelsville|    EMS|   22|
+|       Blue Bell|   Fire|  285|
+|           Barto|   Fire|   21|
++----------------+-------+-----+
+
+
